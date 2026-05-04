@@ -1,10 +1,5 @@
 import express from 'express'
-import {
-  getWallet,
-  getPositions,
-  getTrades,
-  getWatchlist
-} from '../controllers/DFController.js'
+import { getWallet, getPositions, getTrades, getWatchlist } from '../controllers/DFcontroller.js'
 
 const router = express.Router()
 

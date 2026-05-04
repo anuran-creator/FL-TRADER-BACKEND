@@ -4,20 +4,55 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// ── INIT WALLET (called on first login if wallet doesn't exist) ──────────────
+// GET WALLET
+router.get('/wallet', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data, error } = await supabase
+      .from('wallets')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    if (!data) {
+      // Auto-create wallet if missing
+      const { data: newWallet, error: createErr } = await supabase
+        .from('wallets')
+        .insert([{
+          user_id: userId,
+          balance: 10000.00,
+          total_deposited: 10000.00,
+          loans: 0
+        }])
+        .select()
+        .maybeSingle();
+
+      if (createErr) return res.status(400).json({ error: createErr.message });
+      return res.json(newWallet);
+    }
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// INIT WALLET
 router.post('/init-wallet', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Check if wallet already exists
     const { data: existing } = await supabase
       .from('wallets')
-      .select('id')
+      .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (existing) {
-      return res.json({ message: 'Wallet already exists' });
+      return res.json({ wallet: existing, message: 'Wallet already exists' });
     }
 
     const { data: wallet, error } = await supabase
@@ -38,36 +73,16 @@ router.post('/init-wallet', requireAuth, async (req, res) => {
   }
 });
 
-// ── GET WALLET (authenticated — user can only see their own) ─────────────────
-router.get('/wallet', requireAuth, async (req, res) => {
-  try {
-    const userId = req.user.id; // ✅ from token, not URL
-
-    const { data, error } = await supabase
-      .from('wallets')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error) return res.status(400).json({ error: error.message });
-
-    res.json(data || { balance: 10000.00, total_deposited: 10000.00, loans: 0 });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── ADD FUNDS (authenticated) ────────────────────────────────────────────────
+// ADD FUNDS
 router.post('/add-funds/:userId', requireAuth, async (req, res) => {
   try {
-    const userId = req.user.id; // ✅ always use token user id, ignore URL param
+    const userId = req.user.id;
     const { amount } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: 'Valid amount is required' });
     }
 
-    // Max cap to prevent abuse (optional — adjust as needed)
     if (amount > 1000000) {
       return res.status(400).json({ error: 'Amount exceeds maximum allowed per transaction.' });
     }
@@ -107,10 +122,10 @@ router.post('/add-funds/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// ── TAKE LOAN (authenticated) ────────────────────────────────────────────────
+// TAKE LOAN
 router.post('/take-loan/:userId', requireAuth, async (req, res) => {
   try {
-    const userId = req.user.id; // ✅ from token
+    const userId = req.user.id;
     const { amount } = req.body;
 
     if (!amount || amount <= 0) {
@@ -127,7 +142,6 @@ router.post('/take-loan/:userId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found' });
     }
 
-    // Loan limit: max 2x current balance
     const newLoanTotal = (wallet.loans || 0) + amount;
     if (newLoanTotal > wallet.balance * 2) {
       return res.status(400).json({
@@ -160,12 +174,11 @@ router.post('/take-loan/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// ── RESET WALLET (authenticated) ─────────────────────────────────────────────
+// RESET WALLET
 router.post('/reset-wallet/:userId', requireAuth, async (req, res) => {
   try {
-    const userId = req.user.id; // ✅ from token
+    const userId = req.user.id;
 
-    // Close all open positions first
     await supabase
       .from('positions')
       .update({
@@ -175,7 +188,6 @@ router.post('/reset-wallet/:userId', requireAuth, async (req, res) => {
       .eq('user_id', userId)
       .eq('status', 'open');
 
-    // Reset wallet to $10,000
     const { data: wallet, error: walletError } = await supabase
       .from('wallets')
       .update({

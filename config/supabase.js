@@ -1,13 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
+import 'dotenv/config'
 
-const supabase = createClient(
-  'https://mtyghphhysaodngqahsu.supabase.co',
-  'sb_publishable_M_gr_603GYwukqeKja8akg_VD_GRvuC'
-)
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_KEY
 
-console.log("✅ Supabase connected");
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing SUPABASE_URL or SUPABASE_KEY in .env')
+  process.exit(1)
+}
 
+const supabase = createClient(supabaseUrl, supabaseKey)
 
+console.log('✅ Supabase connected')
 
 export default supabase
-

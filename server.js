@@ -8,22 +8,21 @@ import DFRoutes from './routes/DFroutes.js'
 import userRoutes from './routes/userRoutes.js'
 import tradeRoutes from './routes/tradeRoutes.js'
 import supabase from './config/supabase.js'
-import { fetchMultipleStocks } from './services/stockApi.js'
+import { fetchMultipleStocks } from './services/Stockapi.js'
 
 const app = express()
 
-// ── CORS — allow localhost dev + any deployed frontend ───────────────────────
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   process.env.FRONTEND_URL,
-].filter(Boolean);
+].filter(Boolean)
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS blocked: ${origin}`));
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    return callback(new Error('Not allowed by CORS'))
   },
   credentials: true,
 }))
@@ -44,11 +43,11 @@ app.get('/test-db', async (req, res) => {
   res.json({ data })
 })
 
-// FOREX API
 app.get('/api/forex', async (req, res) => {
   try {
     const response = await axios.get(
-      `${process.env.FOREX_API_URL}?from=USD`
+      `${process.env.FOREX_API_URL || 'https://api.frankfurter.app/latest'}?from=USD`,
+      { timeout: 8000 }
     )
     const rates = response.data.rates
     const formatted = Object.keys(rates).map((currency) => ({
@@ -57,30 +56,29 @@ app.get('/api/forex', async (req, res) => {
     }))
     res.json(formatted)
   } catch (err) {
+    console.error('Forex fetch failed:', err.message)
     res.status(500).json({ error: 'Forex fetch failed' })
   }
 })
 
-// LIVE STOCK MARKET DATA API
 app.get('/api/stocks', async (req, res) => {
   try {
     const symbols = [
       'AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN',
       'META', 'NVDA', 'RELIANCE.NS', 'INFY'
-    ];
-    console.log('Fetching live stock prices...');
-    const stocks = await fetchMultipleStocks(symbols);
+    ]
+    console.log('Fetching live stock prices...')
+    const stocks = await fetchMultipleStocks(symbols)
     if (stocks.length === 0) {
-      return res.status(500).json({ error: 'Failed to fetch stock data', fallback: true });
+      return res.status(500).json({ error: 'Failed to fetch stock data', fallback: true })
     }
-    res.json(stocks);
+    res.json(stocks)
   } catch (err) {
-    console.error('Stock API error:', err.message);
-    res.status(500).json({ error: 'Stock fetch failed' });
+    console.error('Stock API error:', err.message)
+    res.status(500).json({ error: 'Stock fetch failed' })
   }
-});
+})
 
-// Test Supabase connection
 app.get('/test-supabase', async (req, res) => {
   try {
     const { data, error } = await supabase.from('users').select('*')
